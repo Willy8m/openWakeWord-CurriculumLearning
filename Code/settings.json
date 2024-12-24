@@ -1,0 +1,19 @@
+{
+    "workbench.colorTheme": "Default Dark Modern",
+    "git.enableSmartCommit": true,
+    "jupyter.askForKernelRestart": false,
+    "cmake.showOptionsMovedNotification": false,
+    "python.defaultInterpreterPath": "C:\\Users\\gbartag\\AppData\\Local\\anaconda3\\envs\\oww\\python.exe",
+    "launch": {
+        "configurations": [
+            {
+                "name": "Debug",
+                "type": "python",
+                "request": "launch",
+                "program": "C:\\Users\\gbartag\\OneDrive - Electrònica Saltó SLU\\Documentos\\GitHub\\openWakeWord\\notebooks\\generate_podcasts_features.py", // Specify the test file
+                "args": ["--lang", "ca", "--hours", "4"],
+                "justMyCode": false
+            }
+        ]
+    }
+}
