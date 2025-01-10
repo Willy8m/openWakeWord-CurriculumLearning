@@ -45,7 +45,7 @@
 # It can be used as with the openWakeWord library, or independently.
 
 # Imports
-# import onnxruntime as ort
+import onnxruntime as ort
 import numpy as np
 import os
 from collections import deque

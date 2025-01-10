@@ -16,12 +16,12 @@ FEATURE_MODELS = {
     }
 }
 
-# VAD_MODELS = {
-#     "silero_vad": {
-#         "model_path": os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources/models/silero_vad.onnx"),
-#         "download_url": "https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/silero_vad.onnx"
-#     }
-# }
+VAD_MODELS = {
+    "silero_vad": {
+        "model_path": os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources/models/silero_vad.onnx"),
+        "download_url": "https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/silero_vad.onnx"
+    }
+}
 
 MODELS = {
     "alexa": {

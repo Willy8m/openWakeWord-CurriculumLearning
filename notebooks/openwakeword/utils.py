@@ -462,6 +462,14 @@ class AudioFeatures():
     def __call__(self, x):
         return self._streaming_features(x)
 
+def f(clips, mdls, prediction_function, q, **kwargs):
+            results = []
+            for clip in clips:
+                func = getattr(mdls[-1], prediction_function)
+                filtered_kwargs = {key: value for key, value in kwargs.items()
+                                   if key in func.__code__.co_varnames}
+                results.append({clip: func(clip, **filtered_kwargs)})
+            q.put(results)
 
 # Bulk prediction function
 def bulk_predict(
@@ -513,16 +521,16 @@ def bulk_predict(
         )
         mdls.append(oww)
 
-        def f(clips):
-            results = []
-            for clip in clips:
-                func = getattr(mdls[-1], prediction_function)
-                filtered_kwargs = {key: value for key, value in kwargs.items()
-                                   if key in func.__code__.co_varnames}
-                results.append({clip: func(clip, **filtered_kwargs)})
-            q.put(results)
+        # def f(clips, mdls, prediction_function, q, **kwargs):
+        #     results = []
+        #     for clip in clips:
+        #         func = getattr(mdls[-1], prediction_function)
+        #         filtered_kwargs = {key: value for key, value in kwargs.items()
+        #                            if key in func.__code__.co_varnames}
+        #         results.append({clip: func(clip, **filtered_kwargs)})
+        #     q.put(results)
 
-        ps.append(Process(target=f, args=(chunk,)))
+        ps.append(Process(target=f, args=(chunk, mdls, prediction_function, q, kwargs)))
 
     # Submit jobs
     for p in ps:

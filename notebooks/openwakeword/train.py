@@ -636,7 +636,7 @@ if __name__ == '__main__':
 
     # imports Piper for synthetic sample generation
     sys.path.insert(0, os.path.abspath(config["piper_sample_generator_path"]))
-    from generate_samples import generate_samples
+    # from generate_samples import generate_samples
 
     # Define output locations
     config["output_dir"] = os.path.abspath(config["output_dir"])
@@ -784,25 +784,25 @@ if __name__ == '__main__':
                 n_cpus = 1
             else:
                 n_cpus = n_cpus//2
-            compute_features_from_generator(positive_clips_train_generator, n_total=len(os.listdir(positive_train_output_dir)),
+            compute_features_from_generator(positive_clips_train_generator, n_total=len(positive_clips_train), #n_total=len(os.listdir(positive_train_output_dir)),
                                             clip_duration=config["total_length"],
                                             output_file=os.path.join(feature_save_dir, "positive_features_train.npy"),
                                             device="gpu" if torch.cuda.is_available() else "cpu",
                                             ncpu=n_cpus if not torch.cuda.is_available() else 1)
 
-            compute_features_from_generator(negative_clips_train_generator, n_total=len(os.listdir(negative_train_output_dir)),
+            compute_features_from_generator(positive_clips_test_generator, n_total=len(positive_clips_test), # n_total=len(os.listdir(positive_test_output_dir)),
+                                            clip_duration=config["total_length"],
+                                            output_file=os.path.join(feature_save_dir, "positive_features_test.npy"),
+                                            device="gpu" if torch.cuda.is_available() else "cpu",
+                                            ncpu=n_cpus if not torch.cuda.is_available() else 1)
+            
+            compute_features_from_generator(negative_clips_train_generator, n_total=len(negative_clips_train), #n_total=len(os.listdir(negative_train_output_dir)),
                                             clip_duration=config["total_length"],
                                             output_file=os.path.join(feature_save_dir, "negative_features_train.npy"),
                                             device="gpu" if torch.cuda.is_available() else "cpu",
                                             ncpu=n_cpus if not torch.cuda.is_available() else 1)
 
-            compute_features_from_generator(positive_clips_test_generator, n_total=len(os.listdir(positive_test_output_dir)),
-                                            clip_duration=config["total_length"],
-                                            output_file=os.path.join(feature_save_dir, "positive_features_test.npy"),
-                                            device="gpu" if torch.cuda.is_available() else "cpu",
-                                            ncpu=n_cpus if not torch.cuda.is_available() else 1)
-
-            compute_features_from_generator(negative_clips_test_generator, n_total=len(os.listdir(negative_test_output_dir)),
+            compute_features_from_generator(negative_clips_test_generator, n_total=len(negative_clips_test), # n_total=len(os.listdir(negative_test_output_dir)),
                                             clip_duration=config["total_length"],
                                             output_file=os.path.join(feature_save_dir, "negative_features_test.npy"),
                                             device="gpu" if torch.cuda.is_available() else "cpu",
@@ -827,15 +827,21 @@ if __name__ == '__main__':
             else:
                 return x
             return new_batch
-
+        
         # Create label transforms as needed for model (currently only supports binary classification models)
+        def positive_label_transform(x):
+            return [1 for _ in x]
+        
+        def negative_label_transform(x):
+            return [0 for _ in x]
+        
         data_transforms = {key: f for key in config["feature_data_files"].keys()}
         label_transforms = {}
         for key in ["positive"] + list(config["feature_data_files"].keys()) + ["adversarial_negative"]:
             if key == "positive":
-                label_transforms[key] = lambda x: [1 for i in x]
+                label_transforms[key] = positive_label_transform
             else:
-                label_transforms[key] = lambda x: [0 for i in x]
+                label_transforms[key] = negative_label_transform
 
         # Add generated positive and adversarial negative clips to the feature data files dictionary
         config["feature_data_files"]['positive'] = os.path.join(feature_save_dir, "positive_features_train.npy")
@@ -862,7 +868,7 @@ if __name__ == '__main__':
         else:
             n_cpus = n_cpus//2
         X_train = torch.utils.data.DataLoader(IterDataset(batch_generator),
-                                              batch_size=None, num_workers=n_cpus, prefetch_factor=16)
+                                              batch_size=None, num_workers=0, prefetch_factor=None)
 
         X_val_fp = np.load(config["false_positive_validation_data_path"])
         X_val_fp = np.array([X_val_fp[i:i+input_shape[0]] for i in range(0, X_val_fp.shape[0]-input_shape[0], 1)])  # reshape to match model
