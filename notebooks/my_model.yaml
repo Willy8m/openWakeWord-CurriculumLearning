@@ -1,30 +1,32 @@
-augmentation_batch_size: 16
-augmentation_rounds: 15
-background_paths:
-- ./data/NEGATIVE/audioset_16k
-- ./data/NEGATIVE/fma_sample
+augmentation_batch_size: 128
+augmentation_rounds: 100
+background_paths: []
 background_paths_duplication_rate:
 - 1
 batch_n_per_class:
-  ACAV100M_sample: 1024
-  adversarial_negative: 50
-  podcasts: 1024
-  positive: 50
+  ACAV100M_sample: 512
+  adversarial_negative: 64
+  fma: 512
+  podcasts: 512
+  positive: 64
+  tv3_train: 512
 custom_negative_phrases: []
-false_positive_validation_data_path: ./data/test/validation_set_features.npy
+false_positive_validation_data_path: F:/data/test/validation_set_features.npy
 feature_data_files:
-  ACAV100M_sample: ./data/NEGATIVE/ACAV100M/openwakeword_features_ACAV100M_2000_hrs_16bit.npy
-  podcasts: ./data/NEGATIVE/podcast_index/openwakeword_features_podcasts_1000h_ca.npy
+  ACAV100M_sample: F:/data/train/NEGATIVE/openwakeword_features_ACAV100M_2000_hrs_16bit.npy
+  fma: F:\data\train\NEGATIVE\fma_large.npy
+  podcasts: F:/data/train/NEGATIVE/openwakeword_features_podcasts_10000h_ca-es_ca_es-es.npy
+  tv3_train: F:\data\train\NEGATIVE\tv3_train.npy
 layer_size: 32
-max_negative_weight: 100
+max_negative_weight: 10
 model_name: alexa
 model_type: dnn
 n_samples: 10000
 n_samples_val: 2000
-output_dir: ./data/my_custom_model
+output_dir: F:/models/alexa_01
 piper_sample_generator_path: ./piper-sample-generator
 rir_paths:
-- ./data/mit_rirs
+- F:\data\train\mit_rirs
 steps: 15000
 target_accuracy: 0.5
 target_false_positives_per_hour: 0.2
