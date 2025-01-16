@@ -1,4 +1,4 @@
-#import config
+ #import config
 import os
 import hashlib
 import json
@@ -36,7 +36,7 @@ def main(args):
     negative_clips, negative_durations = openwakeword.data.filter_audio_paths(
         directories,
         min_length_secs = 1.0, # minimum clip length in seconds
-        max_length_secs = 60*30, # maximum clip length in seconds
+        max_length_secs = 3600*5, # maximum clip length in seconds
         duration_method = "header" # use the file header to calculate duration
     )
 
