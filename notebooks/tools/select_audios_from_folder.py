@@ -11,6 +11,8 @@ def copy_files_with_filter(source_folder, look_for):
     for root, dirs, files in os.walk(source_folder):
         for file in files:
             if look_for in file:
+                name, ext = os.path.splitext(file)
+                new_name = name.replace('.', '_') + ext
                 source_path = os.path.join(root, file)
                 destination_path = os.path.join(destination_folder, file)
 

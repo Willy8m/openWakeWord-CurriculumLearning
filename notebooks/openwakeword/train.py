@@ -900,6 +900,12 @@ if __name__ == '__main__':
             target_fp_per_hour=config["target_false_positives_per_hour"],
         )
 
+        # (Optional) Save training history
+        import pickle
+        json_filename = os.path.join(config["output_dir"], config["model_name"] + "_history.pkl")
+        with open(json_filename, "wb") as f:
+            pickle.dump(oww.history, f) 
+
         # Export the trained model to onnx
         oww.export_model(model=best_model, model_name=config["model_name"], output_dir=config["output_dir"])
 
