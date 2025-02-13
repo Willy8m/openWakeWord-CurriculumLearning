@@ -642,14 +642,14 @@ if __name__ == '__main__':
     config["output_dir"] = os.path.abspath(config["output_dir"])
     if not os.path.exists(config["output_dir"]):
         os.mkdir(config["output_dir"])
-    if not os.path.exists(os.path.join(config["output_dir"], config["model_name"])):
-        os.mkdir(os.path.join(config["output_dir"], config["model_name"]))
+    if not os.path.exists(os.path.join(config["output_dir"], config["data_folder"])):
+        os.mkdir(os.path.join(config["output_dir"], config["data_folder"]))
 
-    positive_train_output_dir = os.path.join(config["output_dir"], config["model_name"], "positive_train")
-    positive_test_output_dir = os.path.join(config["output_dir"], config["model_name"], "positive_test")
-    negative_train_output_dir = os.path.join(config["output_dir"], config["model_name"], "negative_train")
-    negative_test_output_dir = os.path.join(config["output_dir"], config["model_name"], "negative_test")
-    feature_save_dir = os.path.join(config["output_dir"], config["model_name"])
+    positive_train_output_dir = os.path.join(config["output_dir"], config["data_folder"], "positive_train")
+    positive_test_output_dir = os.path.join(config["output_dir"], config["data_folder"], "positive_test")
+    negative_train_output_dir = os.path.join(config["output_dir"], config["data_folder"], "negative_train")
+    negative_test_output_dir = os.path.join(config["output_dir"], config["data_folder"], "negative_test")
+    feature_save_dir = os.path.join(config["output_dir"], config["data_folder"])
 
     # Get paths for impulse response and background audio files
     rir_paths = [i.path for j in config["rir_paths"] for i in os.scandir(j)]
