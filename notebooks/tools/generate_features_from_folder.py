@@ -1,4 +1,4 @@
- #import config
+#import config
 import os
 import hashlib
 import json
@@ -15,7 +15,6 @@ import openwakeword.utils
 from tqdm import tqdm
 from scipy.signal import resample
 from numpy.lib.format import open_memmap
-
 
 def main(args):
 

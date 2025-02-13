@@ -1,9 +1,4 @@
 import os
-from openwakeword.model import Model
-from openwakeword.vad import VAD
-from openwakeword.custom_verifier_model import train_custom_verifier
-
-__all__ = ['Model', 'VAD', 'train_custom_verifier']
 
 FEATURE_MODELS = {
     "embedding": {
@@ -67,3 +62,10 @@ def get_pretrained_model_paths(inference_framework="tflite"):
         return [MODELS[i]["model_path"] for i in MODELS.keys()]
     elif inference_framework == "onnx":
         return [MODELS[i]["model_path"].replace(".tflite", ".onnx") for i in MODELS.keys()]
+
+
+from openwakeword.model import Model
+from openwakeword.vad import VAD
+from openwakeword.custom_verifier_model import train_custom_verifier
+
+__all__ = ['Model', 'VAD', 'train_custom_verifier']
