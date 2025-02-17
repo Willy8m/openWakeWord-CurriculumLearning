@@ -19,7 +19,7 @@ feature_data_files:
   tv3_train: F:\data\train\NEGATIVE\tv3_train.npy
 layer_size: 32
 max_negative_weight: 10
-model_name: alexa
+model_name: 
 model_type: dnn
 n_samples: 10000
 n_samples_val: 2000

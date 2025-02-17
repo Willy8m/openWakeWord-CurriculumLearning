@@ -71,7 +71,7 @@ def generate_roc_curve_fprs(
 
     # Calculate true positive rate
     fprs = []
-    for threshold in tqdm(np.linspace(0.01, 0.99, num=n_points)):
+    for threshold in tqdm(np.linspace(0.001, 0.999, num=n_points)):
         fpr = get_false_positives(scores, threshold=threshold, **kwargs)
         fprs.append(fpr/total_hours)
 
@@ -94,7 +94,7 @@ def generate_roc_curve_tprs(
     """
 
     tprs = []
-    for threshold in tqdm(np.linspace(0.01, 0.99, num=n_points)):
+    for threshold in tqdm(np.linspace(0.001, 0.999, num=n_points)):
         tprs.append(sum(scores >= threshold)/len(scores))
 
     return tprs

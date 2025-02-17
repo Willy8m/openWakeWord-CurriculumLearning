@@ -39,6 +39,10 @@ class Model(nn.Module):
         self.best_val_recall = 0
         self.best_train_recall = 0
 
+        self.combined_model_accuracy = 0
+        self.combined_model_recall = 0
+        self.combined_model_fp_per_hr = 0
+
         # Define model (currently on fully-connected network supported)
         if model_type == "dnn":
             # self.model = nn.Sequential(
@@ -359,6 +363,10 @@ class Model(nn.Module):
 
             combined_model_fp_per_hr = (combined_model_fp/val_set_hrs).detach().cpu().numpy()
 
+        self.combined_model_accuracy = combined_model_accuracy
+        self.combined_model_recall = combined_model_recall
+        self.combined_model_fp_per_hr = combined_model_fp_per_hr
+
         logging.info(f"\n################\nFinal Model Accuracy: {combined_model_accuracy}"
                      f"\nFinal Model Recall: {combined_model_recall}\nFinal Model False Positives per Hour: {combined_model_fp_per_hr}"
                      "\n################\n")
@@ -633,6 +641,11 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     config = yaml.load(open(args.training_config, 'r').read(), yaml.Loader)
+
+    # if no model name is given, training_config filename is used
+    if config["model_name"] == None:
+        model_name = os.path.splitext(os.path.basename(args.training_config))[0]
+        config["model_name"] = model_name
 
     # imports Piper for synthetic sample generation
     sys.path.insert(0, os.path.abspath(config["piper_sample_generator_path"]))

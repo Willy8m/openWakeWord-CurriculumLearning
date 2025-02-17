@@ -4,15 +4,15 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+
         {
             "name": "Python Debugger: Current File",
             "type": "debugpy",
             "request": "launch",
-            "program": "C:\\Users\\gbartag\\Documents\\GitHub\\openWakeWord\\notebooks\\generate_podcasts_features.py",
+            "program": "C:\\Users\\gbartag\\source\\Wake-Word-OpenWakeWord\\notebooks\\openwakeword\\train.py",
             "console": "integratedTerminal",
             "args": [
-                "--lang", "ca,ca-es,es-es",
-                "--hours", "4"
+                "--training_config", "C:\\Users\\gbartag\\source\\Wake-Word-OpenWakeWord\\notebooks\\my_model.yaml"
             ]
         }
     ]
