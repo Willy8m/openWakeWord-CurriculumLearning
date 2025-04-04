@@ -45,18 +45,6 @@ class Model(nn.Module):
 
         # Define model (currently on fully-connected network supported)
         if model_type == "dnn":
-            # self.model = nn.Sequential(
-            #     nn.Flatten(),
-            #     nn.Linear(input_shape[0]*input_shape[1], layer_dim),
-            #     nn.LayerNorm(layer_dim),
-            #     nn.ReLU(),
-            #     nn.Linear(layer_dim, layer_dim),
-            #     nn.LayerNorm(layer_dim),
-            #     nn.ReLU(),
-            #     nn.Linear(layer_dim, n_classes),
-            #     nn.Sigmoid() if n_classes == 1 else nn.ReLU(),
-            # )
-
             class FCNBlock(nn.Module):
                 def __init__(self, layer_dim):
                     super().__init__()
@@ -85,6 +73,7 @@ class Model(nn.Module):
                     x = self.last_act(self.last_layer(x))
                     return x
             self.model = Net(input_shape, layer_dim, n_blocks=n_blocks, n_classes=n_classes)
+
         elif model_type == "rnn":
             class Net(nn.Module):
                 def __init__(self, input_shape, n_classes=1):
@@ -95,9 +84,122 @@ class Model(nn.Module):
                     self.layer3 = nn.Sigmoid() if n_classes == 1 else nn.ReLU()
 
                 def forward(self, x):
-                    out, h = self.layer1(x)
-                    return self.layer3(self.layer2(out[:, -1]))
+                    out, _ = self.layer1(x)  # LSTM output is (out, (h_n, c_n))
+                    out = out[:, -1, :]  # Extract last timestep's output
+                    out = self.layer2(out)  # Linear layer
+                    return self.layer3(out)  # Activation function
+
             self.model = Net(input_shape, n_classes)
+
+        elif model_type == "ds-cnn":
+            class DSCNN(nn.Module):
+                def __init__(self, input_shape, n_classes=1):
+                    super().__init__()
+
+                    # Ensure input_shape has (C, H, W)
+                    if len(input_shape) == 2:
+                        input_shape = (1, input_shape[0], input_shape[1])
+
+                    self.conv1 = nn.Conv2d(input_shape[0], 16, kernel_size=3, stride=1, padding=1)
+                    self.dwconv1 = nn.Conv2d(16, 16, kernel_size=3, stride=1, padding=1, groups=16)
+                    self.pwconv1 = nn.Conv2d(16, 32, kernel_size=1, stride=1)
+                    self.relu = nn.ReLU()
+                    self.flatten = nn.Flatten()
+
+                    # Forward pass a dummy tensor to get correct FC input size
+                    with torch.no_grad():
+                        dummy_input = torch.zeros(1, *input_shape)  # Create a dummy input
+                        dummy_output = self.pwconv1(self.dwconv1(self.conv1(dummy_input)))
+                        fc_input_dim = dummy_output.numel()  # Get the flattened size
+
+                    self.fc = nn.Linear(fc_input_dim, n_classes)  # Use computed size
+                    self.act = nn.Sigmoid() if n_classes == 1 else nn.ReLU()
+
+                def forward(self, x):
+                    if x.dim() == 3:  # If missing channel dim, add it
+                        x = x.unsqueeze(1)
+                    x = self.relu(self.conv1(x))
+                    x = self.relu(self.pwconv1(self.dwconv1(x)))
+                    x = self.flatten(x)
+                    return self.act(self.fc(x))
+
+            self.model = DSCNN(input_shape, n_classes)
+
+        elif model_type == "tcn":
+            class TCN(nn.Module):
+                def __init__(self, input_shape, n_classes=1):
+                    super().__init__()
+                    self.conv1 = nn.Conv1d(in_channels=input_shape[1], out_channels=64, kernel_size=3, dilation=1, padding=1)
+                    self.conv2 = nn.Conv1d(64, 64, kernel_size=3, dilation=2, padding=2)
+                    self.conv3 = nn.Conv1d(64, 64, kernel_size=3, dilation=4, padding=4)
+                    self.fc = nn.Linear(64, n_classes)
+                    self.act = nn.Sigmoid() if n_classes == 1 else nn.ReLU()
+
+                def forward(self, x):
+                    x = x.permute(0, 2, 1)  # Swap dimensions if needed
+                    x = torch.relu(self.conv1(x))
+                    x = torch.relu(self.conv2(x))
+                    x = torch.relu(self.conv3(x))
+                    x = torch.mean(x, dim=-1)
+                    return self.act(self.fc(x))
+
+            self.model = TCN(input_shape, n_classes)
+
+        elif model_type == "hyena":
+            class HyenaNet(nn.Module):
+                def __init__(self, input_shape, n_classes):
+                    super().__init__()
+                    self.conv1 = nn.Conv1d(input_shape[-1], 64, kernel_size=3, padding=1)
+                    self.conv2 = nn.Conv1d(64, 128, kernel_size=3, padding=1)
+                    self.fc = nn.Linear(128, n_classes)
+                    self.act = nn.Sigmoid() if n_classes == 1 else nn.ReLU()
+
+                def forward(self, x):
+                    if not isinstance(x, torch.Tensor):
+                        x = torch.tensor(x, dtype=torch.float32)  # Convert to tensor if needed
+
+                    x = x.permute(0, 2, 1)  # Ensure correct shape for Conv1d (batch, channels, time)
+                    x = F.relu(self.conv1(x))
+                    x = F.relu(self.conv2(x))
+                    x = x.mean(dim=-1)  # Global average pooling
+                    return self.act(self.fc(x))
+
+            self.model = HyenaNet(input_shape, n_classes)
+
+        elif model_type == "capsnet":
+            class CapsuleNet(nn.Module):
+                def __init__(self, input_shape, n_classes):
+                    super().__init__()
+                    self.conv1 = nn.Conv1d(input_shape[-1], 256, kernel_size=9, stride=1)
+                    self.primary_caps = nn.Conv1d(256, 32 * 8, kernel_size=9, stride=2)
+                    self.fc = nn.Linear(32 * 8, n_classes)
+                    self.act = nn.Sigmoid() if n_classes == 1 else nn.ReLU()
+
+                def forward(self, x):
+                    x = x.permute(0, 2, 1)
+                    x = F.relu(self.conv1(x))
+                    x = F.relu(self.primary_caps(x))
+                    x = x.view(x.size(0), -1)
+                    return self.act(self.fc(x))
+            self.model = CapsuleNet(input_shape, n_classes)
+
+        # elif model_type == "gnn":
+        #     from torch_geometric.nn import GCNConv
+
+        #     class GNNNet(nn.Module):
+        #         def __init__(self, input_shape, n_classes):
+        #             super().__init__()
+        #             self.gcn1 = GCNConv(input_shape[-1], 64)
+        #             self.gcn2 = GCNConv(64, 128)
+        #             self.fc = nn.Linear(128, n_classes)
+        #             self.act = nn.Sigmoid() if n_classes == 1 else nn.ReLU()
+
+        #         def forward(self, x, edge_index):
+        #             x = F.relu(self.gcn1(x, edge_index))
+        #             x = F.relu(self.gcn2(x, edge_index))
+        #             x = x.mean(dim=0)
+        #             return self.act(self.fc(x))
+        #     self.model = GNNNet(input_shape, n_classes)
 
         # Define metrics
         if n_classes == 1:
@@ -138,6 +240,7 @@ class Model(nn.Module):
         self.loss = torch.nn.functional.binary_cross_entropy if n_classes == 1 else nn.functional.cross_entropy
         self.optimizer = optim.Adam(self.model.parameters(), lr=0.0001)
 
+        
     def save_model(self, output_path):
         """
         Saves the weights of a trained Pytorch model
@@ -262,12 +365,26 @@ class Model(nn.Module):
 
         return best_model
 
+
     def auto_train(self, X_train, X_val, false_positive_val_data, steps=50000, max_negative_weight=1000,
                    target_fp_per_hour=0.2):
         """A sequence of training steps that produce relatively strong models
         automatically, based on validation data and performance targets provided.
         After training merges the best checkpoints and returns a single model.
         """
+
+        if config["weighting_mode"] == "default":
+            training_func = self.train_model
+        elif config["weighting_mode"] == "uncertainty-based":
+            training_func = self.train_model_uncertainty_based
+        elif config["weighting_mode"] == "curriculum-learning":
+            training_func = self.train_model_curriculum_learning
+        elif config["weighting_mode"] == "CL": # this is curriculum learning, but augmenting samples from easy to hard on the augmentation phase (using ponderation schedule)
+            training_func = self.train_model_CL
+        elif config["weighting_mode"] == "acl":
+            training_func = self.train_model_anti_curriculum_learning
+        elif config["weighting_mode"] == "gbnm":
+            training_func = self.train_model_gradient_based_negative_mining
 
         # Get false positive validation data duration
         val_set_hrs = 11.3
@@ -277,7 +394,7 @@ class Model(nn.Module):
         lr = 0.0001
         weights = np.linspace(1, max_negative_weight, int(steps)).tolist()
         val_steps = np.linspace(steps-int(steps*0.25), steps, 20).astype(np.int64)
-        self.train_model(
+        training_func(
                     X=X_train,
                     X_val=X_val,
                     false_positive_val_data=false_positive_val_data,
@@ -298,7 +415,7 @@ class Model(nn.Module):
 
         weights = np.linspace(1, max_negative_weight, int(steps)).tolist()
         val_steps = np.linspace(1, steps, 20).astype(np.int16)
-        self.train_model(
+        training_func(
                     X=X_train,
                     X_val=X_val,
                     false_positive_val_data=false_positive_val_data,
@@ -318,7 +435,7 @@ class Model(nn.Module):
 
         weights = np.linspace(1, max_negative_weight, int(steps)).tolist()
         val_steps = np.linspace(1, steps, 20).astype(np.int16)
-        self.train_model(
+        training_func(
                     X=X_train,
                     X_val=X_val,
                     false_positive_val_data=false_positive_val_data,
@@ -372,6 +489,7 @@ class Model(nn.Module):
                      "\n################\n")
 
         return combined_model
+
 
     def predict_on_features(self, features, model=None):
         """
@@ -439,6 +557,697 @@ class Model(nn.Module):
 
         return None
 
+    def train_model_gradient_based_negative_mining(self, X, max_steps, warmup_steps, hold_steps, X_val=None,
+                false_positive_val_data=None, positive_test_clips=None,
+                negative_weight_schedule=[1],
+                val_steps=[250], lr=0.0001, val_set_hrs=1):
+
+        # Move models and main class to target device
+        self.to(self.device)
+        self.model.to(self.device)
+
+        accumulation_steps = 1
+        accumulated_samples = 0
+        accumulated_predictions = torch.Tensor([]).to(self.device)
+        accumulated_labels = torch.Tensor([]).to(self.device)
+
+        for step_ndx, data in tqdm(enumerate(X, 0), total=max_steps, desc="Training"):
+            x, y = data[0].to(self.device), data[1].to(self.device)
+            y_ = y[..., None].to(torch.float32)
+
+            # Update learning rates
+            for g in self.optimizer.param_groups:
+                g['lr'] = self.lr_warmup_cosine_decay(step_ndx, warmup_steps, hold_steps, max_steps, lr)
+
+            self.optimizer.zero_grad()
+            predictions = self.model(x)
+
+            # Calculate per-sample loss
+            loss = self.loss(predictions, y_ if self.n_classes == 1 else y)
+            loss_per_sample = loss.detach()  # Store detached loss values
+
+            # Compute per-sample gradients
+            loss.mean().backward(retain_graph=True)  
+            gradients = torch.stack([param.grad.norm(2) for param in self.model.parameters() if param.grad is not None])
+
+            # Identify hardest negatives based on top k% gradient magnitude
+            grad_threshold = torch.quantile(gradients, 0.9)  # Top 10% hardest samples
+            hard_neg_indices = (gradients >= grad_threshold).nonzero(as_tuple=True)[0]
+
+            if len(hard_neg_indices) > 0:
+                x_hard = x[hard_neg_indices]
+                y_hard = y[hard_neg_indices]
+                predictions_hard = predictions[hard_neg_indices]
+
+                # Compute loss again with only hardest negatives
+                loss_hard = self.loss(predictions_hard, y_hard.unsqueeze(-1).float() if self.n_classes == 1 else y_hard.float())
+                loss_hard = loss_hard / accumulation_steps
+                accumulated_samples += predictions_hard.shape[0]
+
+                if predictions_hard.shape[0] >= 128:
+                    accumulated_predictions = predictions_hard
+                    accumulated_labels = y_hard
+                else:
+                    accumulation_steps += 1
+                    accumulated_predictions = torch.cat((accumulated_predictions, predictions_hard))
+                    accumulated_labels = torch.cat((accumulated_labels, y_hard))
+
+                # Apply gradient updates
+                if accumulated_samples >= 128:
+                    loss_hard.backward()
+                    self.optimizer.step()
+                    accumulation_steps = 1
+                    accumulated_samples = 0
+
+                    self.history["loss"].append(loss_hard.detach().cpu().numpy())
+
+                    # Compute training metrics and log them
+                    fp = self.fp(accumulated_predictions, accumulated_labels)
+                    self.n_fp += fp
+                    self.history["recall"].append(self.recall(accumulated_predictions, accumulated_labels.unsqueeze(-1)).detach().cpu().numpy())
+
+                    accumulated_predictions = torch.Tensor([]).to(self.device)
+                    accumulated_labels = torch.Tensor([]).to(self.device)
+
+            # Run validation steps...
+            # if step_ndx in val_steps and step_ndx > 1 and false_positive_val_data is not None:
+            #     val_fp = sum(self.fp(self.model(data[0].to(self.device)), data[1].to(self.device)) for val_step_ndx, data in enumerate(false_positive_val_data))
+            #     # val_fp = 0
+            #     # for data in false_positive_val_data:
+            #     #     with torch.no_grad():  # Disable gradient computation to save memory
+            #     #         x_val, y_val = data[0].to(self.device), data[1].to(self.device)
+            #     #         val_predictions = self.model(x_val)  # Run model inference
+            #     #         val_fp += self.fp(val_predictions, y_val.to(self.device))  # Keep computation on the same device
+            #     self.history["val_fp_per_hr"].append((val_fp / val_set_hrs).detach().cpu().numpy())
+
+            # Run validation and log validation metrics
+            if step_ndx in val_steps and step_ndx > 1 and false_positive_val_data is not None:
+                # Get false positives per hour with false positive data
+                val_fp = 0
+                for val_step_ndx, data in enumerate(false_positive_val_data):
+                    with torch.no_grad():
+                        x_val, y_val = data[0].to(self.device), data[1].to(self.device)
+                        val_predictions = self.model(x_val)
+                        val_fp += self.fp(val_predictions, y_val[..., None])
+                val_fp_per_hr = (val_fp/val_set_hrs).detach().cpu().numpy()
+                self.history["val_fp_per_hr"].append(val_fp_per_hr)
+            
+            if step_ndx in val_steps and step_ndx > 1 and positive_test_clips is not None:
+                tp, fn = 0, 0
+                for _, data in enumerate(positive_test_clips):
+                    with torch.no_grad():
+                        x_val = data[0].to(self.device)
+                        batch = [x_val[:, i:i+16, :] for i in range(0, x_val.shape[1]-16, 1)]
+                        batch = torch.vstack(batch)
+                        preds = self.model(batch)
+                        if any(preds >= 0.5):
+                            tp += 1
+                        else:
+                            fn += 1
+                self.history["positive_test_clips_recall"].append(tp / (tp + fn))
+
+            if step_ndx in val_steps and step_ndx > 1 and X_val is not None:
+                for _, data in enumerate(X_val):
+                    with torch.no_grad():
+                        x_val, y_val = data[0].to(self.device), data[1].to(self.device)
+                        val_predictions = self.model(x_val)
+                        val_recall = self.recall(val_predictions, y_val[..., None]).detach().cpu().numpy()
+                        val_acc = self.accuracy(val_predictions, y_val[..., None].to(torch.int64))
+                        val_fp = self.fp(val_predictions, y_val[..., None])
+                self.history["val_accuracy"].append(val_acc.detach().cpu().numpy())
+                self.history["val_recall"].append(val_recall)
+                self.history["val_n_fp"].append(val_fp.detach().cpu().numpy())
+
+            if step_ndx in val_steps and step_ndx > 1:
+                if self.history["val_n_fp"][-1] <= np.percentile(self.history["val_n_fp"], 50) and \
+                self.history["val_recall"][-1] >= np.percentile(self.history["val_recall"], 5):
+                    self.best_models.append(copy.deepcopy(self.model))
+                    self.best_model_scores.append({
+                        "training_step_ndx": step_ndx, 
+                        "val_n_fp": self.history["val_n_fp"][-1],
+                        "val_recall": self.history["val_recall"][-1],
+                        "val_accuracy": self.history["val_accuracy"][-1],
+                        "val_fp_per_hr": self.history.get("val_fp_per_hr", [0])[-1]
+                    })
+                    self.best_val_recall = self.history["val_recall"][-1]
+                    self.best_val_accuracy = self.history["val_accuracy"][-1]
+
+            if step_ndx == max_steps-1:
+                break
+    
+    def train_model_CL(self, X, max_steps, warmup_steps, hold_steps, X_val=None,
+                   false_positive_val_data=None, positive_test_clips=None,
+                   negative_weight_schedule=[1], val_steps=[250], lr=0.0001, val_set_hrs=1):
+    
+        self.to(self.device)
+        self.model.to(self.device)
+
+        accumulation_steps = 1
+        accumulated_samples = 0
+        accumulated_predictions = torch.Tensor([]).to(self.device)
+        accumulated_labels = torch.Tensor([]).to(self.device)
+
+        num_chunks = 10  # Split data into 10 equal parts
+        steps_per_chunk = max_steps // num_chunks  # How long to train on each part
+        dataset_size = len(X)  # Get total dataset size
+
+        neg_threshold = .01
+        pos_threshold = .99
+
+        for step_ndx in tqdm(range(max_steps), total=max_steps, desc="Training"):
+            # Determine current curriculum stage
+            chunk_idx = min(step_ndx // steps_per_chunk, num_chunks - 1)  # Avoid exceeding dataset
+            start_idx = (chunk_idx * dataset_size) // num_chunks
+            end_idx = ((chunk_idx + 1) * dataset_size) // num_chunks
+
+            # Slice data dynamically for this stage
+            from itertools import islice
+            X_curriculum = islice(X, start_idx, end_idx)
+
+            for data in X_curriculum:
+                x, y = data[0].to(self.device), data[1].to(self.device)
+                y_ = y[..., None].to(torch.float32)
+
+                # Update learning rates
+                for g in self.optimizer.param_groups:
+                    g['lr'] = self.lr_warmup_cosine_decay(step_ndx, warmup_steps=warmup_steps, hold=hold_steps,
+                                                        total_steps=max_steps, target_lr=lr)
+
+                self.optimizer.zero_grad()
+
+                # Get predictions
+                predictions = self.model(x)
+
+                # Curriculum: Start with easy negatives, introduce harder ones over time
+                neg_high_loss = predictions[(y == 0) & (predictions.squeeze() >= neg_threshold)]
+                pos_high_loss = predictions[(y == 1) & (predictions.squeeze() < pos_threshold)]
+
+                y = torch.cat((y[(y == 0) & (predictions.squeeze() >= neg_threshold)], 
+                            y[(y == 1) & (predictions.squeeze() < pos_threshold)]))
+                y_ = y[..., None].to(torch.float32)
+                predictions = torch.cat((neg_high_loss, pos_high_loss))
+
+                # Adjust batch weights based on curriculum stage
+                if len(negative_weight_schedule) == 1:
+                    w = torch.ones(y.shape[0]) * negative_weight_schedule[0]
+                    w[y == 1] = 1
+                    w = w[..., None]
+                else:
+                    if self.n_classes == 1:
+                        w = torch.ones(y.shape[0]) * negative_weight_schedule[step_ndx]
+                        w[y == 1] = 1
+                        w = w[..., None]
+
+                if predictions.shape[0] != 0:
+                    loss = self.loss(predictions, y_ if self.n_classes == 1 else y, w.to(self.device))
+                    loss = loss / accumulation_steps
+                    accumulated_samples += predictions.shape[0]
+
+                    if predictions.shape[0] >= 128:
+                        accumulated_predictions = predictions
+                        accumulated_labels = y_
+                    if accumulated_samples < 128:
+                        accumulation_steps += 1
+                        accumulated_predictions = torch.cat((accumulated_predictions, predictions))
+                        accumulated_labels = torch.cat((accumulated_labels, y_))
+                    else:
+                        loss.backward()
+                        self.optimizer.step()
+                        accumulation_steps = 1
+                        accumulated_samples = 0
+
+                        self.history["loss"].append(loss.detach().cpu().numpy())
+
+                        # Compute training metrics
+                        fp = self.fp(accumulated_predictions, accumulated_labels if self.n_classes == 1 else y)
+                        self.n_fp += fp
+                        self.history["recall"].append(self.recall(accumulated_predictions, accumulated_labels).detach().cpu().numpy())
+
+                        accumulated_predictions = torch.Tensor([]).to(self.device)
+                        accumulated_labels = torch.Tensor([]).to(self.device)
+
+                # Validation steps remain unchanged
+                if step_ndx in val_steps and step_ndx > 1 and false_positive_val_data is not None:
+                    val_fp = 0
+                    for _, data in enumerate(false_positive_val_data):
+                        with torch.no_grad():
+                            x_val, y_val = data[0].to(self.device), data[1].to(self.device)
+                            val_predictions = self.model(x_val)
+                            val_fp += self.fp(val_predictions, y_val[..., None])
+                    val_fp_per_hr = (val_fp / val_set_hrs).detach().cpu().numpy()
+                    self.history["val_fp_per_hr"].append(val_fp_per_hr)
+
+                if step_ndx in val_steps and step_ndx > 1 and positive_test_clips is not None:
+                    tp, fn = 0, 0
+                    for _, data in enumerate(positive_test_clips):
+                        with torch.no_grad():
+                            x_val = data[0].to(self.device)
+                            batch = [x_val[:, i:i+16, :] for i in range(0, x_val.shape[1]-16, 1)]
+                            batch = torch.vstack(batch)
+                            preds = self.model(batch)
+                            if any(preds >= 0.5):
+                                tp += 1
+                            else:
+                                fn += 1
+                    self.history["positive_test_clips_recall"].append(tp / (tp + fn))
+
+                if step_ndx in val_steps and step_ndx > 1 and X_val is not None:
+                    for _, data in enumerate(X_val):
+                        with torch.no_grad():
+                            x_val, y_val = data[0].to(self.device), data[1].to(self.device)
+                            val_predictions = self.model(x_val)
+                            val_recall = self.recall(val_predictions, y_val[..., None]).detach().cpu().numpy()
+                            val_acc = self.accuracy(val_predictions, y_val[..., None].to(torch.int64))
+                            val_fp = self.fp(val_predictions, y_val[..., None])
+                    self.history["val_accuracy"].append(val_acc.detach().cpu().numpy())
+                    self.history["val_recall"].append(val_recall)
+                    self.history["val_n_fp"].append(val_fp.detach().cpu().numpy())
+
+                if step_ndx in val_steps and step_ndx > 1:
+                    if self.history["val_n_fp"][-1] <= np.percentile(self.history["val_n_fp"], 50) and \
+                    self.history["val_recall"][-1] >= np.percentile(self.history["val_recall"], 5):
+                        self.best_models.append(copy.deepcopy(self.model))
+                        self.best_model_scores.append({
+                            "training_step_ndx": step_ndx, 
+                            "val_n_fp": self.history["val_n_fp"][-1],
+                            "val_recall": self.history["val_recall"][-1],
+                            "val_accuracy": self.history["val_accuracy"][-1],
+                            "val_fp_per_hr": self.history.get("val_fp_per_hr", [0])[-1]
+                        })
+                        self.best_val_recall = self.history["val_recall"][-1]
+                        self.best_val_accuracy = self.history["val_accuracy"][-1]
+
+                if step_ndx == max_steps - 1:
+                    break
+
+    def train_model_curriculum_learning(self, X, max_steps, warmup_steps, hold_steps, X_val=None,
+                    false_positive_val_data=None, positive_test_clips=None,
+                    negative_weight_schedule=[1], val_steps=[250], lr=0.0001, val_set_hrs=1):
+    
+        self.to(self.device)
+        self.model.to(self.device)
+
+        accumulation_steps = 1
+        accumulated_samples = 0
+        accumulated_predictions = torch.Tensor([]).to(self.device)
+        accumulated_labels = torch.Tensor([]).to(self.device)
+
+        # Curriculum Learning: Define progression schedule
+        curriculum_progress = np.linspace(0, 1, int(max_steps))  # Linear progression
+        neg_threshold_schedule = 0.01 + 0.2 * (curriculum_progress ** 2)  # Gradually tighten threshold
+        pos_threshold_schedule = 0.99 - 0.2 * (curriculum_progress ** 2)  # Gradually tighten threshold
+
+        for step_ndx, data in tqdm(enumerate(X, 0), total=max_steps, desc="Training"):
+            x, y = data[0].to(self.device), data[1].to(self.device)
+            y_ = y[..., None].to(torch.float32)
+
+            # Update learning rates
+            for g in self.optimizer.param_groups:
+                g['lr'] = self.lr_warmup_cosine_decay(step_ndx, warmup_steps=warmup_steps, hold=hold_steps,
+                                                    total_steps=max_steps, target_lr=lr)
+
+            self.optimizer.zero_grad()
+
+            # Get predictions
+            predictions = self.model(x)
+
+            # Dynamic thresholding based on curriculum progress
+            neg_threshold = neg_threshold_schedule[step_ndx]
+            pos_threshold = pos_threshold_schedule[step_ndx]
+
+            # Curriculum: Start with easy negatives, introduce harder ones over time
+            neg_high_loss = predictions[(y == 0) & (predictions.squeeze() >= neg_threshold)]
+            pos_high_loss = predictions[(y == 1) & (predictions.squeeze() < pos_threshold)]
+
+            y = torch.cat((y[(y == 0) & (predictions.squeeze() >= neg_threshold)], 
+                        y[(y == 1) & (predictions.squeeze() < pos_threshold)]))
+            y_ = y[..., None].to(torch.float32)
+            predictions = torch.cat((neg_high_loss, pos_high_loss))
+
+            # Adjust batch weights based on curriculum stage
+            if len(negative_weight_schedule) == 1:
+                w = torch.ones(y.shape[0]) * negative_weight_schedule[0]
+                w[y == 1] = 1
+                w = w[..., None]
+            else:
+                if self.n_classes == 1:
+                    w = torch.ones(y.shape[0]) * negative_weight_schedule[step_ndx]
+                    w[y == 1] = 1
+                    w = w[..., None]
+
+            if predictions.shape[0] != 0:
+                loss = self.loss(predictions, y_ if self.n_classes == 1 else y, w.to(self.device))
+                loss = loss / accumulation_steps
+                accumulated_samples += predictions.shape[0]
+
+                if predictions.shape[0] >= 128:
+                    accumulated_predictions = predictions
+                    accumulated_labels = y_
+                if accumulated_samples < 128:
+                    accumulation_steps += 1
+                    accumulated_predictions = torch.cat((accumulated_predictions, predictions))
+                    accumulated_labels = torch.cat((accumulated_labels, y_))
+                else:
+                    loss.backward()
+                    self.optimizer.step()
+                    accumulation_steps = 1
+                    accumulated_samples = 0
+
+                    self.history["loss"].append(loss.detach().cpu().numpy())
+
+                    # Compute training metrics
+                    fp = self.fp(accumulated_predictions, accumulated_labels if self.n_classes == 1 else y)
+                    self.n_fp += fp
+                    self.history["recall"].append(self.recall(accumulated_predictions, accumulated_labels).detach().cpu().numpy())
+
+                    accumulated_predictions = torch.Tensor([]).to(self.device)
+                    accumulated_labels = torch.Tensor([]).to(self.device)
+
+            # Validation steps remain unchanged
+            if step_ndx in val_steps and step_ndx > 1 and false_positive_val_data is not None:
+                val_fp = 0
+                for _, data in enumerate(false_positive_val_data):
+                    with torch.no_grad():
+                        x_val, y_val = data[0].to(self.device), data[1].to(self.device)
+                        val_predictions = self.model(x_val)
+                        val_fp += self.fp(val_predictions, y_val[..., None])
+                val_fp_per_hr = (val_fp / val_set_hrs).detach().cpu().numpy()
+                self.history["val_fp_per_hr"].append(val_fp_per_hr)
+
+            if step_ndx in val_steps and step_ndx > 1 and positive_test_clips is not None:
+                tp, fn = 0, 0
+                for _, data in enumerate(positive_test_clips):
+                    with torch.no_grad():
+                        x_val = data[0].to(self.device)
+                        batch = [x_val[:, i:i+16, :] for i in range(0, x_val.shape[1]-16, 1)]
+                        batch = torch.vstack(batch)
+                        preds = self.model(batch)
+                        if any(preds >= 0.5):
+                            tp += 1
+                        else:
+                            fn += 1
+                self.history["positive_test_clips_recall"].append(tp / (tp + fn))
+
+            if step_ndx in val_steps and step_ndx > 1 and X_val is not None:
+                for _, data in enumerate(X_val):
+                    with torch.no_grad():
+                        x_val, y_val = data[0].to(self.device), data[1].to(self.device)
+                        val_predictions = self.model(x_val)
+                        val_recall = self.recall(val_predictions, y_val[..., None]).detach().cpu().numpy()
+                        val_acc = self.accuracy(val_predictions, y_val[..., None].to(torch.int64))
+                        val_fp = self.fp(val_predictions, y_val[..., None])
+                self.history["val_accuracy"].append(val_acc.detach().cpu().numpy())
+                self.history["val_recall"].append(val_recall)
+                self.history["val_n_fp"].append(val_fp.detach().cpu().numpy())
+
+            if step_ndx in val_steps and step_ndx > 1:
+                if self.history["val_n_fp"][-1] <= np.percentile(self.history["val_n_fp"], 50) and \
+                self.history["val_recall"][-1] >= np.percentile(self.history["val_recall"], 5):
+                    self.best_models.append(copy.deepcopy(self.model))
+                    self.best_model_scores.append({
+                        "training_step_ndx": step_ndx, 
+                        "val_n_fp": self.history["val_n_fp"][-1],
+                        "val_recall": self.history["val_recall"][-1],
+                        "val_accuracy": self.history["val_accuracy"][-1],
+                        "val_fp_per_hr": self.history.get("val_fp_per_hr", [0])[-1]
+                    })
+                    self.best_val_recall = self.history["val_recall"][-1]
+                    self.best_val_accuracy = self.history["val_accuracy"][-1]
+
+            if step_ndx == max_steps - 1:
+                break
+
+    def train_model_anti_curriculum_learning(self, X, max_steps, warmup_steps, hold_steps, X_val=None,
+                    false_positive_val_data=None, positive_test_clips=None,
+                    negative_weight_schedule=[1], val_steps=[250], lr=0.0001, val_set_hrs=1):
+    
+        self.to(self.device)
+        self.model.to(self.device)
+
+        accumulation_steps = 1
+        accumulated_samples = 0
+        accumulated_predictions = torch.Tensor([]).to(self.device)
+        accumulated_labels = torch.Tensor([]).to(self.device)
+
+        # Curriculum Learning: Define progression schedule
+        curriculum_progress = np.linspace(0, 1, int(max_steps))  # Linearly increase step-wise
+        neg_threshold_schedule = 0.2 - 0.19 * (curriculum_progress ** 2)  # Start hard, then ease
+        pos_threshold_schedule = 0.8 + 0.19 * (curriculum_progress ** 2)  # Start strict, then relax
+
+        for step_ndx, data in tqdm(enumerate(X, 0), total=max_steps, desc="Training"):
+            x, y = data[0].to(self.device), data[1].to(self.device)
+            y_ = y[..., None].to(torch.float32)
+
+            # Update learning rates
+            for g in self.optimizer.param_groups:
+                g['lr'] = self.lr_warmup_cosine_decay(step_ndx, warmup_steps=warmup_steps, hold=hold_steps,
+                                                    total_steps=max_steps, target_lr=lr)
+
+            self.optimizer.zero_grad()
+
+            # Get predictions
+            predictions = self.model(x)
+
+            # Dynamic thresholding based on curriculum progress
+            neg_threshold = neg_threshold_schedule[step_ndx]
+            pos_threshold = pos_threshold_schedule[step_ndx]
+
+            # Curriculum: Start with easy negatives, introduce harder ones over time
+            neg_high_loss = predictions[(y == 0) & (predictions.squeeze() >= neg_threshold)]
+            pos_high_loss = predictions[(y == 1) & (predictions.squeeze() < pos_threshold)]
+
+            y = torch.cat((y[(y == 0) & (predictions.squeeze() >= neg_threshold)], 
+                        y[(y == 1) & (predictions.squeeze() < pos_threshold)]))
+            y_ = y[..., None].to(torch.float32)
+            predictions = torch.cat((neg_high_loss, pos_high_loss))
+
+            # Adjust batch weights based on curriculum stage
+            if len(negative_weight_schedule) == 1:
+                w = torch.ones(y.shape[0]) * negative_weight_schedule[0]
+                w[y == 1] = 1
+                w = w[..., None]
+            else:
+                if self.n_classes == 1:
+                    w = torch.ones(y.shape[0]) * negative_weight_schedule[step_ndx]
+                    w[y == 1] = 1
+                    w = w[..., None]
+
+            if predictions.shape[0] != 0:
+                loss = self.loss(predictions, y_ if self.n_classes == 1 else y, w.to(self.device))
+                loss = loss / accumulation_steps
+                accumulated_samples += predictions.shape[0]
+
+                if predictions.shape[0] >= 128:
+                    accumulated_predictions = predictions
+                    accumulated_labels = y_
+                if accumulated_samples < 128:
+                    accumulation_steps += 1
+                    accumulated_predictions = torch.cat((accumulated_predictions, predictions))
+                    accumulated_labels = torch.cat((accumulated_labels, y_))
+                else:
+                    loss.backward()
+                    self.optimizer.step()
+                    accumulation_steps = 1
+                    accumulated_samples = 0
+
+                    self.history["loss"].append(loss.detach().cpu().numpy())
+
+                    # Compute training metrics
+                    fp = self.fp(accumulated_predictions, accumulated_labels if self.n_classes == 1 else y)
+                    self.n_fp += fp
+                    self.history["recall"].append(self.recall(accumulated_predictions, accumulated_labels).detach().cpu().numpy())
+
+                    accumulated_predictions = torch.Tensor([]).to(self.device)
+                    accumulated_labels = torch.Tensor([]).to(self.device)
+
+            # Validation steps remain unchanged
+            if step_ndx in val_steps and step_ndx > 1 and false_positive_val_data is not None:
+                val_fp = 0
+                for _, data in enumerate(false_positive_val_data):
+                    with torch.no_grad():
+                        x_val, y_val = data[0].to(self.device), data[1].to(self.device)
+                        val_predictions = self.model(x_val)
+                        val_fp += self.fp(val_predictions, y_val[..., None])
+                val_fp_per_hr = (val_fp / val_set_hrs).detach().cpu().numpy()
+                self.history["val_fp_per_hr"].append(val_fp_per_hr)
+
+            if step_ndx in val_steps and step_ndx > 1 and positive_test_clips is not None:
+                tp, fn = 0, 0
+                for _, data in enumerate(positive_test_clips):
+                    with torch.no_grad():
+                        x_val = data[0].to(self.device)
+                        batch = [x_val[:, i:i+16, :] for i in range(0, x_val.shape[1]-16, 1)]
+                        batch = torch.vstack(batch)
+                        preds = self.model(batch)
+                        if any(preds >= 0.5):
+                            tp += 1
+                        else:
+                            fn += 1
+                self.history["positive_test_clips_recall"].append(tp / (tp + fn))
+
+            if step_ndx in val_steps and step_ndx > 1 and X_val is not None:
+                for _, data in enumerate(X_val):
+                    with torch.no_grad():
+                        x_val, y_val = data[0].to(self.device), data[1].to(self.device)
+                        val_predictions = self.model(x_val)
+                        val_recall = self.recall(val_predictions, y_val[..., None]).detach().cpu().numpy()
+                        val_acc = self.accuracy(val_predictions, y_val[..., None].to(torch.int64))
+                        val_fp = self.fp(val_predictions, y_val[..., None])
+                self.history["val_accuracy"].append(val_acc.detach().cpu().numpy())
+                self.history["val_recall"].append(val_recall)
+                self.history["val_n_fp"].append(val_fp.detach().cpu().numpy())
+
+            if step_ndx in val_steps and step_ndx > 1:
+                if self.history["val_n_fp"][-1] <= np.percentile(self.history["val_n_fp"], 50) and \
+                self.history["val_recall"][-1] >= np.percentile(self.history["val_recall"], 5):
+                    self.best_models.append(copy.deepcopy(self.model))
+                    self.best_model_scores.append({
+                        "training_step_ndx": step_ndx, 
+                        "val_n_fp": self.history["val_n_fp"][-1],
+                        "val_recall": self.history["val_recall"][-1],
+                        "val_accuracy": self.history["val_accuracy"][-1],
+                        "val_fp_per_hr": self.history.get("val_fp_per_hr", [0])[-1]
+                    })
+                    self.best_val_recall = self.history["val_recall"][-1]
+                    self.best_val_accuracy = self.history["val_accuracy"][-1]
+
+            if step_ndx == max_steps - 1:
+                break
+
+    def train_model_uncertainty_based(self, X, max_steps, warmup_steps, hold_steps, X_val=None,
+                    false_positive_val_data=None, positive_test_clips=None,
+                    negative_weight_schedule=[1],
+                    val_steps=[250], lr=0.0001, val_set_hrs=1):
+        # Move models and main class to target device
+        self.to(self.device)
+        self.model.to(self.device)
+
+        def compute_weights(predictions, y, min_weight=0.1, max_weight=1.0):
+            """Compute uncertainty-based sample weights."""
+            uncertainty = 1 - torch.abs(predictions - 0.5)  # Higher uncertainty → Higher weight
+            weights = min_weight + (max_weight - min_weight) * uncertainty
+            return weights.detach()  # Detach weights from computation graph
+
+        # Train model
+        accumulation_steps = 1
+        accumulated_samples = 0
+        accumulated_predictions = torch.Tensor([]).to(self.device)
+        accumulated_labels = torch.Tensor([]).to(self.device)
+        for step_ndx, data in tqdm(enumerate(X, 0), total=max_steps, desc="Training"):
+            # get the inputs; data is a list of [inputs, labels]
+            x, y = data[0].to(self.device), data[1].to(self.device)
+            y_ = y[..., None].to(torch.float32)
+
+            # Update learning rates
+            for g in self.optimizer.param_groups:
+                g['lr'] = self.lr_warmup_cosine_decay(step_ndx, warmup_steps=warmup_steps, hold=hold_steps,
+                                                      total_steps=max_steps, target_lr=lr)
+
+            # zero the parameter gradients
+            self.optimizer.zero_grad()
+
+            # Get predictions for batch
+            predictions = self.model(x)
+
+            # Construct batch with only samples that have high loss
+            neg_high_loss = predictions[(y == 0) & (predictions.squeeze() >= 0.001)]  # thresholds were chosen arbitrarily but work well
+            pos_high_loss = predictions[(y == 1) & (predictions.squeeze() < 0.999)]
+            y = torch.cat((y[(y == 0) & (predictions.squeeze() >= 0.001)], y[(y == 1) & (predictions.squeeze() < 0.999)]))
+            y_ = y[..., None].to(torch.float32)
+            predictions = torch.cat((neg_high_loss, pos_high_loss))
+            
+            # Compute uncertainty-based weights
+            if predictions.shape[0] != 0:
+                w = compute_weights(predictions, y_)
+
+                # Do backpropagation, with gradient accumulation if the batch-size after selecting high loss examples is too small
+                loss = self.loss(predictions, y_ if self.n_classes == 1 else y, w.to(self.device))
+                loss = loss/accumulation_steps
+                accumulated_samples += predictions.shape[0]
+
+                if predictions.shape[0] >= 128:
+                    accumulated_predictions = predictions
+                    accumulated_labels = y_
+                if accumulated_samples < 128:
+                    accumulation_steps += 1
+                    accumulated_predictions = torch.cat((accumulated_predictions, predictions))
+                    accumulated_labels = torch.cat((accumulated_labels, y_))
+                else:
+                    loss.backward()
+                    self.optimizer.step()
+                    accumulation_steps = 1
+                    accumulated_samples = 0
+
+                    self.history["loss"].append(loss.detach().cpu().numpy())
+
+                    # Compute training metrics and log them
+                    fp = self.fp(accumulated_predictions, accumulated_labels if self.n_classes == 1 else y)
+                    self.n_fp += fp
+                    self.history["recall"].append(self.recall(accumulated_predictions, accumulated_labels).detach().cpu().numpy())
+
+                    accumulated_predictions = torch.Tensor([]).to(self.device)
+                    accumulated_labels = torch.Tensor([]).to(self.device)
+
+            # Run validation and log validation metrics
+            if step_ndx in val_steps and step_ndx > 1 and false_positive_val_data is not None:
+                # Get false positives per hour with false positive data
+                val_fp = 0
+                for val_step_ndx, data in enumerate(false_positive_val_data):
+                    with torch.no_grad():
+                        x_val, y_val = data[0].to(self.device), data[1].to(self.device)
+                        val_predictions = self.model(x_val)
+                        val_fp += self.fp(val_predictions, y_val[..., None])
+                val_fp_per_hr = (val_fp/val_set_hrs).detach().cpu().numpy()
+                self.history["val_fp_per_hr"].append(val_fp_per_hr)
+
+            # Get recall on test clips
+            if step_ndx in val_steps and step_ndx > 1 and positive_test_clips is not None:
+                tp = 0
+                fn = 0
+                for val_step_ndx, data in enumerate(positive_test_clips):
+                    with torch.no_grad():
+                        x_val = data[0].to(self.device)
+                        batch = []
+                        for i in range(0, x_val.shape[1]-16, 1):
+                            batch.append(x_val[:, i:i+16, :])
+                        batch = torch.vstack(batch)
+                        preds = self.model(batch)
+                        if any(preds >= 0.5):
+                            tp += 1
+                        else:
+                            fn += 1
+                self.history["positive_test_clips_recall"].append(tp/(tp + fn))
+
+            if step_ndx in val_steps and step_ndx > 1 and X_val is not None:
+                # Get metrics for balanced test examples of positive and negative clips
+                for val_step_ndx, data in enumerate(X_val):
+                    with torch.no_grad():
+                        x_val, y_val = data[0].to(self.device), data[1].to(self.device)
+                        val_predictions = self.model(x_val)
+                        val_recall = self.recall(val_predictions, y_val[..., None]).detach().cpu().numpy()
+                        val_acc = self.accuracy(val_predictions, y_val[..., None].to(torch.int64))
+                        val_fp = self.fp(val_predictions, y_val[..., None])
+                self.history["val_accuracy"].append(val_acc.detach().cpu().numpy())
+                self.history["val_recall"].append(val_recall)
+                self.history["val_n_fp"].append(val_fp.detach().cpu().numpy())
+
+            # Save models with a validation score above/below the 90th percentile
+            # of the validation scores up to that point
+            if step_ndx in val_steps and step_ndx > 1:
+                if self.history["val_n_fp"][-1] <= np.percentile(self.history["val_n_fp"], 50) and \
+                   self.history["val_recall"][-1] >= np.percentile(self.history["val_recall"], 5):
+                    # logging.info("Saving checkpoint with metrics >= to targets!")
+                    self.best_models.append(copy.deepcopy(self.model))
+                    self.best_model_scores.append({"training_step_ndx": step_ndx, "val_n_fp": self.history["val_n_fp"][-1],
+                                                   "val_recall": self.history["val_recall"][-1],
+                                                   "val_accuracy": self.history["val_accuracy"][-1],
+                                                   "val_fp_per_hr": self.history.get("val_fp_per_hr", [0])[-1]})
+                    self.best_val_recall = self.history["val_recall"][-1]
+                    self.best_val_accuracy = self.history["val_accuracy"][-1]
+
+            if step_ndx == max_steps-1:
+                break
+    
     def train_model(self, X, max_steps, warmup_steps, hold_steps, X_val=None,
                     false_positive_val_data=None, positive_test_clips=None,
                     negative_weight_schedule=[1],
@@ -576,7 +1385,6 @@ class Model(nn.Module):
 
             if step_ndx == max_steps-1:
                 break
-
 
 # Separate function to convert onnx models to tflite format
 def convert_onnx_to_tflite(onnx_model_path, output_path):
@@ -748,47 +1556,66 @@ if __name__ == '__main__':
         else:
             logging.warning(f"Skipping generation of negative clips for testing, as ~{config['n_samples_val']} already exist")
 
-    # Set the total length of the training clips based on the ~median generated clip duration, rounding to the nearest 1000 samples
-    # and setting to 32000 when the median + 750 ms is close to that, as it's a good default value
-    n = 50  # sample size
-    positive_clips = [str(i) for i in Path(positive_test_output_dir).glob("*.wav")]
-    duration_in_samples = []
-    for i in range(n):
-        sr, dat = scipy.io.wavfile.read(positive_clips[np.random.randint(0, len(positive_clips))])
-        duration_in_samples.append(len(dat))
-
-    config["total_length"] = int(round(np.median(duration_in_samples)/1000)*1000) + 12000  # add 750 ms to clip duration as buffer
-    if config["total_length"] < 32000:
-        config["total_length"] = 32000  # set a minimum of 32000 samples (2 seconds)
-    elif abs(config["total_length"] - 32000) <= 4000:
-        config["total_length"] = 32000
-
     # Do Data Augmentation
     if args.augment_clips is True:
+
+        # # Set the total length of the training clips based on the ~median generated clip duration, rounding to the nearest 1000 samples
+        # # and setting to 32000 when the median + 750 ms is close to that, as it's a good default value
+        # n = 50  # sample size
+        # positive_clips = [str(i) for i in Path(positive_test_output_dir).glob("*.wav")]
+        # duration_in_samples = []
+        # for i in range(n):
+        #     sr, dat = scipy.io.wavfile.read(positive_clips[np.random.randint(0, len(positive_clips))])
+        #     duration_in_samples.append(len(dat))
+
+        # config["total_length"] = int(round(np.median(duration_in_samples)/1000)*1000) + 12000  # add 750 ms to clip duration as buffer
+        # if config["total_length"] < 32000:
+        #     config["total_length"] = 32000  # set a minimum of 32000 samples (2 seconds)
+        # elif abs(config["total_length"] - 32000) <= 4000:
+        #     config["total_length"] = 32000
+
+        config["total_length"] = 32000
+
         if not os.path.exists(os.path.join(feature_save_dir, "positive_features_train.npy")) or args.overwrite is True:
+            
+            # Load augmentation probabilities
+            default_augmentation_probabilities = {
+                "SevenBandParametricEQ": 0.25,
+                "TanhDistortion": 0.25,
+                "PitchShift": 0.25,
+                "BandStopFilter": 0.25,
+                "AddColoredNoise": 0.25,
+                "AddBackgroundNoise": 0.75,
+                "Gain": 1.0,
+                "RIR": 0.5
+            }
+            augmentation_probabilities = default_augmentation_probabilities \
+                                            if "augmentation_probabilities" not in config or "augmentation_probabilities" == None \
+                                            else config["augmentation_probabilities"]
+
             positive_clips_train = [str(i) for i in Path(positive_train_output_dir).glob("*.wav")]*config["augmentation_rounds"]
             positive_clips_train_generator = augment_clips(positive_clips_train, total_length=config["total_length"],
                                                            batch_size=config["augmentation_batch_size"],
                                                            background_clip_paths=background_paths,
-                                                           RIR_paths=rir_paths)
+                                                           RIR_paths=rir_paths, augmentation_probabilities=augmentation_probabilities)
 
             positive_clips_test = [str(i) for i in Path(positive_test_output_dir).glob("*.wav")]*config["augmentation_rounds"]
             positive_clips_test_generator = augment_clips(positive_clips_test, total_length=config["total_length"],
                                                           batch_size=config["augmentation_batch_size"],
                                                           background_clip_paths=background_paths,
-                                                          RIR_paths=rir_paths)
+                                                          RIR_paths=rir_paths, augmentation_probabilities=augmentation_probabilities)
 
             negative_clips_train = [str(i) for i in Path(negative_train_output_dir).glob("*.wav")]*config["augmentation_rounds"]
             negative_clips_train_generator = augment_clips(negative_clips_train, total_length=config["total_length"],
                                                            batch_size=config["augmentation_batch_size"],
                                                            background_clip_paths=background_paths,
-                                                           RIR_paths=rir_paths)
+                                                           RIR_paths=rir_paths, augmentation_probabilities=augmentation_probabilities)
 
             negative_clips_test = [str(i) for i in Path(negative_test_output_dir).glob("*.wav")]*config["augmentation_rounds"]
             negative_clips_test_generator = augment_clips(negative_clips_test, total_length=config["total_length"],
                                                           batch_size=config["augmentation_batch_size"],
                                                           background_clip_paths=background_paths,
-                                                          RIR_paths=rir_paths)
+                                                          RIR_paths=rir_paths, augmentation_probabilities=augmentation_probabilities)
 
             # Compute features and save to disk via memmapped arrays
             logging.info("#"*50 + "\nComputing openwakeword features for generated samples\n" + "#"*50)
@@ -827,9 +1654,18 @@ if __name__ == '__main__':
     if args.train_model is True:
         F = openwakeword.utils.AudioFeatures(device='cpu')
         input_shape = np.load(os.path.join(feature_save_dir, "positive_features_test.npy")).shape[1:]
+        config["hidden_layers"]  =         1 if ("hidden_layers"  not in config or config["hidden_layers"]  == None) else config["hidden_layers"]
+        config["weighting_mode"] = "default" if ("weighting_mode" not in config or config["weighting_mode"] == None) else config["weighting_mode"]
 
-        oww = Model(n_classes=1, input_shape=input_shape, model_type=config["model_type"],
-                    layer_dim=config["layer_size"], seconds_per_example=1280*input_shape[0]/16000)
+        oww = Model(n_classes=1, input_shape=input_shape, seconds_per_example=1280*input_shape[0]/16000,
+                    model_type=config["model_type"],
+                    layer_dim=config["layer_size"], 
+                    n_blocks=config["hidden_layers"])
+        
+        # Print model summary
+        from torchsummary import summary
+        if config["model_type"] != "rnn":
+            summary(oww.model, input_size=input_shape)
 
         # Create data transform function for batch generation to handle differ clip lengths (todo: write tests for this)
         def f(x, n=input_shape[0]):
@@ -915,7 +1751,10 @@ if __name__ == '__main__':
 
         # (Optional) Save training history
         import pickle
-        json_filename = os.path.join(config["output_dir"], config["model_name"] + "_history.pkl")
+        training_histories_dir = os.path.join(config["output_dir"], "training_histories")
+        if not os.path.exists(training_histories_dir):
+            os.makedirs(training_histories_dir)
+        json_filename = os.path.join(training_histories_dir, config["model_name"] + "_history.pkl")
         with open(json_filename, "wb") as f:
             pickle.dump(oww.history, f) 
 

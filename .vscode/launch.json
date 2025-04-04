@@ -4,6 +4,12 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+        
+
+
+
+
+    
 
         {
             "name": "Python Debugger: Current File",
@@ -11,8 +17,16 @@
             "request": "launch",
             "program": "C:\\Users\\gbartag\\source\\Wake-Word-OpenWakeWord\\notebooks\\openwakeword\\train.py",
             "console": "integratedTerminal",
+            "justMyCode": false,
             "args": [
-                "--training_config", "C:\\Users\\gbartag\\source\\Wake-Word-OpenWakeWord\\notebooks\\my_model.yaml"
+                // "--training_config", "F:\\models\\mobvoi\\hi-xiaowen_no-augmentation_uncertainty-based.yaml", "--train_model"
+                //"--training_config", "F:\\models\\hola-ayud_00\\hola-ayud_1-real-person+TTS.yaml", "--train_model"
+                // "--training_config", "F:\\models\\mobvoi\\hi-xiaowen_no-augmentation.yaml", "--train_model"
+                // "--training_config", "F:\\models\\hola-ayud_00\\hola-ayud_piper_01.yaml", "--train_model"
+
+                "--training_config", "F:\\models\\hola-maia_00\\experiments\\hidden_layers\\augment.yaml", "--augment_clips"
+
+
             ]
         }
     ]

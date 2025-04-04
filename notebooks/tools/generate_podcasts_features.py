@@ -69,8 +69,9 @@ def get_logger(log_level: int = logging.DEBUG):
             
 def podcast_api_call(lang: str, max_results: int):
 
-    api_key = "FDP6MLVWZUZP67QMAZG6"
-    api_secret = "3X^hPB$d^LEGn7zb3kZtGCQRtftwBtsBdrR76FhH"
+    # Keys must be obtained from https://api.podcastindex.org/developer_home
+    api_key = ""
+    api_secret = ""
     url = "https://api.podcastindex.org/api/1.0/episodes/random?&lang=" + lang + "&max=" + str(max_results)
     
     epoch_time = int(time.time())  # we'll need the unix time
