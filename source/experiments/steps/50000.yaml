@@ -1,0 +1,55 @@
+# Directory where positive and adversarial data will be generated and augmented (see models/README)
+output_dir: F:/models/hola-maia_00
+data_folder: hola-maia  # This points to the positive and adversarial data folder
+model_name: # .onnx & .tflite files (if no model name is given, this yaml filename is used)
+
+# --generate_clips (not used)
+piper_sample_generator_path: ./piper-sample-generator
+target_phrase: 
+custom_negative_phrases: []
+n_samples: 
+n_samples_val: 
+tts_batch_size: 
+
+# --augment_clips
+augmentation_batch_size: 128
+augmentation_rounds: 500
+rir_paths:
+- F:\data\train\mit_rirs
+background_paths:
+- F:\data\train\NEGATIVE\wham_noise\tr
+- F:\data\train\NEGATIVE\DEMAND
+background_paths_duplication_rate: 
+- 1
+- 1
+
+# --train_model
+model_type: dnn
+layer_size: 64
+steps: 50000
+max_negative_weight: 200
+
+batch_n_per_class:
+  positive: 64
+  adversarial_negative: 64
+  ACAV100M_sample: 512
+  fma: 512
+  podcasts: 512
+  tv3_train: 512
+  wham_tr: 64
+feature_data_files:
+  ACAV100M_sample: F:/data/train/NEGATIVE/openwakeword_features_ACAV100M_2000_hrs_16bit.npy
+  fma: F:\data\train\NEGATIVE\fma_large.npy
+  podcasts: F:/data/train/NEGATIVE/openwakeword_features_podcasts_10000h_ca-es_ca_es-es.npy
+  tv3_train: F:\data\train\NEGATIVE\tv3_train.npy
+  wham_tr: F:\data\train\NEGATIVE\wham_tr.npy
+false_positive_validation_data_path: F:/data/validation/validation_set_features.npy
+
+target_accuracy: 0.85
+target_recall: 0.25
+target_false_positives_per_hour: 0.2
+
+# Metrics after training (manually copied)
+Final Model Accuracy: 0.9033229947090149
+Final Model Recall: 0.7766666412353516
+Final Model False Positives per Hour: 2.2123892307281494

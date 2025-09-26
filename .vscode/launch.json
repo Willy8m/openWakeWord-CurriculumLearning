@@ -5,12 +5,6 @@
     "version": "0.2.0",
     "configurations": [
         
-
-
-
-
-    
-
         {
             "name": "Python Debugger: Current File",
             "type": "debugpy",
@@ -23,10 +17,8 @@
                 //"--training_config", "F:\\models\\hola-ayud_00\\hola-ayud_1-real-person+TTS.yaml", "--train_model"
                 // "--training_config", "F:\\models\\mobvoi\\hi-xiaowen_no-augmentation.yaml", "--train_model"
                 // "--training_config", "F:\\models\\hola-ayud_00\\hola-ayud_piper_01.yaml", "--train_model"
-
-                "--training_config", "F:\\models\\hola-maia_00\\experiments\\hidden_layers\\augment.yaml", "--augment_clips"
-
-
+                // "--training_config", "F:\\models\\hola-maia_00\\experiments\\hidden_layers\\augment.yaml", "--augment_clips"
+                "--training_config", "F:\\models\\hola-ari_00\\hola-ari_ACL.yaml", "--augment_clips"
             ]
         }
     ]
