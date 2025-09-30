@@ -1456,7 +1456,7 @@ if __name__ == '__main__':
         config["model_name"] = model_name
 
     # imports Piper for synthetic sample generation
-    sys.path.insert(0, os.path.abspath(config["piper_sample_generator_path"]))
+    # sys.path.insert(0, os.path.abspath(config["piper_sample_generator_path"]))
     # from generate_samples import generate_samples
 
     # Define output locations
